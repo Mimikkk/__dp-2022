@@ -22,8 +22,8 @@ aaSPfLTmjh3fU
 aaLTdQr7DyHuU 
 */
 
-#define SIZE 4
-const char stro[] = "aa5UYq6trT5u.";
+#define SIZE 6
+const char stro[] = "aaLTdQr7DyHuU";
 
 /* odkomentować dla wersji z mpi */
 
@@ -52,6 +52,7 @@ int main(int argc, char **argv) {
 
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
+
   if (rank == 0) {
     pthread_create(&thread_message_handler, 0, msg_handler, 0);
   }
@@ -59,18 +60,22 @@ int main(int argc, char **argv) {
 
   char salt[3] = {stro[0], stro[1], '\0'};
 
-  char *cmp = calloc(SIZE + 1, sizeof(char));
-  cmp[0] = 'a' + rank;
+  char *password = calloc(SIZE + 1, sizeof(char));
+  password[0] = 'a' + rank;
 
-  for (int j = 'a'; j <= 'z'; ++j) {
-    for (int k = 'a'; k <= 'z'; ++k) {
-      for (int n = 'a'; n <= 'z'; ++n) {
-        cmp = (char[]) {cmp[0], j, k, n, '\0'};
-        var decoded = crypt(cmp, salt);
-        if ((strcmp(decoded, stro)) == 0) {
-          MPI_Send(cmp, SIZE + 1, MPI_BYTE, 0, 0, MPI_COMM_WORLD);
-          MPI_Finalize();
-          exit(0);
+  for (int i = 'a'; i <= 'z'; ++i) {
+    for (int j = 'a'; j <= 'z'; ++j) {
+      for (int k = 'a'; k <= 'z'; ++k) {
+        for (int l = 'a'; l <= 'z'; ++l) {
+          for (int m = 'a'; m <= 'z'; ++m) {
+            password = (char[]) {password[0], i, j, k, l, m, '\0'};
+            var decoded = crypt(password, salt);
+            if ((strcmp(decoded, stro)) == 0) {
+              MPI_Send(password, SIZE + 1, MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+              MPI_Finalize();
+              exit(0);
+            }
+          }
         }
       }
     }
