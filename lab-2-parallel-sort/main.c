@@ -2,90 +2,134 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
-#define SORT 1
-#define END 2
-// jeżeli zerowy nie będzie uczestniczył w sortowaniu
-// Procesów musi być o jeden więcej niż TABSIZE
-#define TABSIZE 10000
 
-// Kompilujemy mpicc, uruchamiamy mpirun -np N ./a.out liczby_do_sortowania
-// gdzie N to liczba procesów
-int main(int argc, char **argv) {
-  MPI_Init(&argc, &argv);
+enum { TabSize = 8 };
+#define var __auto_type
+#define loop for(;;)
 
-  int size, rank;
-  int tablica[TABSIZE] = {0};
-  int sorted[TABSIZE] = {-1};
-  int max = -1;
-  int tmp = -1;
-  int i;
-  int end = 0;
-  MPI_Status status;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
+enum { Start, End };
 
-  if (argc < 2) {
-    MPI_Finalize();
-    printf("Za malo argumentow\n");
-    exit(0);
-  }
-  /*
-      Szkielet dzieli procesy na dwie kategorie: wierzchołek, liście
-  */
-
-  if (rank == 0) {
-    /* Wczytywanie liczb do posortowania z pliku podanego jako pierwszy argument */
-    printf("Otwieram plik\n");
-    FILE *f;
-    int i;
-    f = fopen(argv[1], "r");
-    for (i = 0; i < TABSIZE; i++) fscanf(f, "%d", &(tablica[i]));
-    for (i = 0; i < TABSIZE; i++) printf("%d ", (tablica[i]));
-
-    /* jeżeli root uczestniczy w sortowaniu */
-    max = tablica[0];
-    printf("\n------------\n");
-    /**/
-
-    // Popraw TABSIZE na mniejszą liczbę, odpalaj TABSIZE+1 procesów (jeżeli 
-    // master nie uczestniczy w sortowaniu
-    /* Tutaj wstaw wysyłanie liczb do bezpośrednich następników wierzchołka */
-    printf("%d: Wczytuje %d, wysylam\n", rank, max);
-
-    /* jeżeli root nie uczestniczy w sortowaniu, to od i=0 */
-    for (i = 1; i < TABSIZE; i++) {
-      //MPI_SEND I MPI_RECV są niepoprawne, popraw nazwy na właściwe
-      // MPI_SEND( &(tablica[i])..... 
-      //MPI_SEND( skąd, ile, typ, do kogo, z jakim tagiem, MPI_COMM_WORLD)
-    }
-    /**/
-    /* Zawiadamiamy, że więcej liczb do wysyłania nie będzie*/
-    int dummy = -1;
-    MPI_Send(&dummy, 1, MPI_INT, 1, END, MPI_COMM_WORLD); //koniec liczb
-
-    /* Tutaj wstaw odbieranie posortowanych liczb */
-    for (i = 1; i < size; i++) {
-      //    MPI_Recv( gdzie, ile , jakiego typu, od kogo, z jakim tagiem, MPI_COMM_WORLD, &status);
-    }
-
-    /* Wyświetlanie posortowanej tablicy */
-    for (i = 0; i < TABSIZE; i++) {
-      printf("%d ", sorted[i]);
-    }
-    printf("\n");
-
-  } else { //Ani wierzchołek, ani liść
-    while (!end) {
-      MPI_Recv(&tmp, 1, MPI_INT, rank - 1, MPI_ANY_TAG, \
-                    MPI_COMM_WORLD, &status);
-      if (status.MPI_TAG == END) {
-        end = 1;
-        //coś jeszcze?
-      } else {
-        //sortowanie babelkowe
-      }
-    }
+int Argc;
+char **Argv;
+char *Filename;
+void handle_arguments(int argc, char **argv) {
+  if (argc != 2) {
+    printf("Usage: %s <file with numbers>\n", argv[0]);
+    exit(1);
   }
 
+  Argc = argc;
+  Argv = argv;
+  Filename = argv[1];
+}
+
+int raw[TabSize];
+void read_numbers(void) {
+  var file = fopen(Filename, "r");
+  for (int i = 0; i < TabSize; ++i) fscanf(file, "%d", &raw[i]);
+  fclose(file);
+}
+void show_numbers(void) {
+  for (int i = 0; i < TabSize; ++i) printf("%d\n", raw[i]);
+}
+
+int sorted[TabSize];
+void read_sorted_numbers(void) {
+  for (int i = 0; i < TabSize; ++i) sorted[i] = raw[i];
+}
+void show_sorted_numbers(void) {
+  for (int i = 0; i < TabSize; ++i) printf("%d\n", sorted[i]);
+}
+
+enum {
+    Main = 0,
+    Leaf = 1,
+};
+int Size, Rank;
+void initialize_mpi(void) {
+  MPI_Init(&Argc, &Argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &Rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &Size);
+}
+void finalize_mpi(void) {
   MPI_Finalize();
+}
+void present_rank(void) {
+  printf("Hello from rank %d/%d\n", Rank + 1, Size);
+}
+
+void send_numbers_to_leaves(void) {
+  for (int i = 1; i < TabSize; ++i) {
+    printf("Sending %d to %d\n", raw[i], i);
+    MPI_Send(&raw[i], 1, MPI_INT, i, Start, MPI_COMM_WORLD);
+  }
+}
+
+void receive_numbers_from_leaves(void) {
+  for (int i = 1; i < TabSize; ++i) {
+    MPI_Recv(&sorted[i], 1, MPI_INT, i, Start, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    printf("Received %d from %d\n", sorted[i], i);
+  }
+}
+
+void main_logic(void) {
+  read_numbers();
+  show_numbers();
+
+  send_numbers_to_leaves();
+  receive_numbers_from_leaves();
+
+  show_sorted_numbers();
+}
+
+int Min = -1;
+int K;
+void handle_number(void) {
+  if (Min == -1) Min = K;
+  else {
+    if (K < Min) Min = K;
+
+    var next = (Rank + 1) % Rank;
+    if (next == 0) ++next;
+    MPI_Send(&Min, 1, MPI_INT, next, 0, MPI_COMM_WORLD);
+  }
+}
+
+#define loop for(;;)
+void read_numbers_from_main(void) {
+  loop {
+    MPI_Recv(&K, 1, MPI_INT, MPI_ANY_SOURCE, Start, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    printf("I '%d' Received %d\n", Rank, K);
+
+    handle_number();
+    break;
+  }
+
+  MPI_Send(&Min, 1, MPI_INT, Main, End, MPI_COMM_WORLD);
+}
+
+void leaf_logic(void) {
+  read_numbers_from_main();
+}
+
+void perform_logic(void) {
+  switch (Rank) {
+    case Main:
+      return main_logic();
+    default:
+      return leaf_logic();
+  }
+}
+
+int main(int argc, char **argv) {
+  handle_arguments(argc, argv);
+
+  initialize_mpi();
+
+  present_rank();
+  perform_logic();
+
+  finalize_mpi();
+
+  exit(0);
 }
