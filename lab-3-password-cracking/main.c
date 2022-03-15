@@ -1,4 +1,3 @@
-#define __XOPEN_SOURCE
 #define _XOPEN_SOURCE
 #include <crypt.h>
 #include <string.h>
@@ -32,7 +31,7 @@ void *msg_handler(void *parameter) {
   printf("START!\n");
   char password[SIZE + 1] = {0};
   MPI_Status status;
-  MPI_Recv(password, SIZE, MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+  MPI_Recv(password, SIZE + 1, MPI_BYTE, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
   printf("Hasło to: %s\n", password);
   MPI_Abort(MPI_COMM_WORLD, 0);
   exit(0);
